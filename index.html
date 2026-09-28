@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Magic Mirror</title>
+<link rel="icon" href="assets/logo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;1,400;1,500&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="stage">
+  <!-- hidden live source, kept in-layout (not display:none) so decoding never pauses -->
+  <video id="webcam" playsinline autoplay muted></video>
+
+  <canvas id="canvas-base"></canvas>
+  <canvas id="canvas-fog"></canvas>
+  <canvas id="canvas-fx"></canvas>
+
+  <header id="brand">
+    <img src="assets/logo.png" alt="Magic Mirror" id="brand-mark" />
+  </header>
+
+  <div id="instruction" aria-live="polite">
+    <span id="instruction-text">Breathe a little magic.</span>
+    <button id="tap-to-mist" type="button">or tap to mist</button>
+  </div>
+
+  <div id="controls" class="hidden">
+    <button id="btn-undo" class="ctl-btn" type="button" aria-label="Undo last stroke" title="Undo">
+      <svg viewBox="0 0 24 24"><path d="M8.5 8.5H16a4.5 4.5 0 0 1 0 9h-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M11.5 5.2 8 8.5l3.5 3.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button id="btn-clear" class="ctl-btn" type="button" aria-label="Clear drawing" title="Clear">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+    </button>
+    <button id="btn-mist" class="ctl-btn" type="button" aria-label="Mist again" title="Mist again">
+      <svg viewBox="0 0 24 24"><path d="M4 15.5c1-1 2-1 3 0s2 1 3 0 2-1 3 0 2 1 3 0 2-1 3 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M5 11.5c1-1 2-1 3 0s2 1 3 0 2-1 3 0 2 1 3 0 2-1 3 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.6"/></svg>
+    </button>
+    <button id="btn-play" class="ctl-btn ctl-btn--primary" type="button">
+      <svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>
+      <span id="btn-play-label">Play my drawing</span>
+    </button>
+  </div>
+
+  <div id="replay-panel" class="hidden">
+    <p id="replay-caption">This is what your drawing sounds like.</p>
+    <div class="replay-actions">
+      <button id="btn-replay-play" type="button">Play again</button>
+      <button id="btn-replay-keep" type="button">Keep drawing</button>
+      <button id="btn-replay-mist" type="button">Mist again</button>
+    </div>
+  </div>
+
+  <div id="start-screen">
+    <div class="start-card">
+      <img src="assets/logo.png" alt="Magic Mirror" class="start-logo" />
+      <p class="start-tagline">A mirror that fogs with your breath<br/>and remembers what you draw.</p>
+      <button id="btn-start" type="button">Step in front of the mirror</button>
+      <p id="start-status" class="start-status"></p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
