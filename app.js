@@ -211,8 +211,8 @@ class MistField {
       let y = origin.y + Math.sin(angle) * jr;
       x = Math.min(Math.max(x, 0), W);
       y = Math.min(Math.max(y, 0), H);
-      const r = minDim * (0.15 + Math.min(spread, 1) * 0.1);
-      const a = Math.min((intensity * dt * 27) / stampCount, 0.32);
+      const r = minDim * (0.18 + Math.min(spread, 1) * 0.12);
+      const a = Math.min((intensity * dt * 45) / stampCount, 0.5);
       if (a <= 0) continue;
       const grad = g.createRadialGradient(x, y, 0, x, y, r);
       grad.addColorStop(0, `rgba(255,255,255,${a})`);
@@ -294,7 +294,7 @@ class MistField {
       blobs.push({
         x: cx, y: cy,
         r: minDim * (0.14 + Math.random() * 0.2),
-        alpha: 0.42 + Math.random() * 0.26,
+        alpha: 0.65 + Math.random() * 0.3,
         delay: radial * 0.7 + Math.random() * 0.15,
         dur: 0.5 + Math.random() * 0.5
       });
@@ -344,7 +344,7 @@ class MistField {
     g.globalCompositeOperation = 'destination-out';
     const edge = g.createRadialGradient(W / 2, H * 0.52, Math.min(W, H) * 0.42, W / 2, H * 0.52, Math.max(W, H) * 0.62);
     edge.addColorStop(0, 'rgba(0,0,0,0)');
-    edge.addColorStop(1, 'rgba(0,0,0,0.4)');
+    edge.addColorStop(1, 'rgba(0,0,0,0.2)');
     g.fillStyle = edge;
     g.fillRect(0, 0, W, H);
     g.globalCompositeOperation = 'source-over';
@@ -609,14 +609,14 @@ function renderFrame(now) {
     if (offFog.width !== W || offFog.height !== H) { offFog.width = W; offFog.height = H; }
     offFogCtx.save();
     offFogCtx.setTransform(1, 0, 0, 1, 0, 0);
-    offFogCtx.filter = `blur(${quality.blur + 3}px) saturate(0.5) brightness(1.32) contrast(0.72)`;
+    offFogCtx.filter = `blur(${quality.blur + 6}px) saturate(0.4) brightness(1.4) contrast(0.6)`;
     offFogCtx.translate(W, 0);
     offFogCtx.scale(-1, 1);
     offFogCtx.drawImage(video, cover.sx, cover.sy, cover.sw, cover.sh, 0, 0, W, H);
     offFogCtx.restore();
     offFogCtx.filter = 'none';
     // milky veil
-    offFogCtx.fillStyle = 'rgba(255,255,255,0.38)';
+    offFogCtx.fillStyle = 'rgba(255,255,255,0.55)';
     offFogCtx.fillRect(0, 0, W, H);
 
     // 3. shape it by the mist density field
@@ -978,8 +978,8 @@ const faceTrack = {
 /* ----------------------------------------------------------------------
    Breath driver — turns the open-mouth score into mist growth. Purely
    visual now (no microphone): the longer the mouth stays open past the
-   deadzone, the denser the mist gets; close it and growth stops (mist.decay
-   then takes over, so it fades again if you don't reopen). Runs for as
+   deadzone, the denser the mist gets; close it and growth stops, but the
+   mist stays on the glass instead of fading. Runs for as
    long as the camera is on — not just before the glass fogs — so keeping
    your mouth open after drawing has started keeps widening the mist.
 ------------------------------------------------------------------------*/
@@ -994,10 +994,8 @@ const breathDriver = {
       const origin = faceTrack.lastMouthPos || mist.currentOrigin
         || { x: canvasFog.width / 2, y: canvasFog.height * 0.55 };
       mist.grow(origin, intensity, dt);
-    } else {
-      // mouth closed (or barely open) — let it dissipate instead of sitting there
-      mist.decay(dt);
     }
+    // mouth closed: the mist stays put (no decay) until wiped or cleared
   }
 };
 
