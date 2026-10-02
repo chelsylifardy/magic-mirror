@@ -212,7 +212,7 @@ class MistField {
       x = Math.min(Math.max(x, 0), W);
       y = Math.min(Math.max(y, 0), H);
       const r = minDim * (0.18 + Math.min(spread, 1) * 0.12);
-      const a = Math.min((intensity * dt * 45) / stampCount, 0.5);
+      const a = Math.min((intensity * dt * 70) / stampCount, 0.7);
       if (a <= 0) continue;
       const grad = g.createRadialGradient(x, y, 0, x, y, r);
       grad.addColorStop(0, `rgba(255,255,255,${a})`);
@@ -294,7 +294,7 @@ class MistField {
       blobs.push({
         x: cx, y: cy,
         r: minDim * (0.14 + Math.random() * 0.2),
-        alpha: 0.65 + Math.random() * 0.3,
+        alpha: 0.85 + Math.random() * 0.15,
         delay: radial * 0.7 + Math.random() * 0.15,
         dur: 0.5 + Math.random() * 0.5
       });
@@ -414,6 +414,8 @@ class WipeMask {
       const sx = this.canvas.width / oldW, sy = this.canvas.height / oldH;
       for (const s of this.strokes) for (const p of s.points) { p.x *= sx; p.y *= sy; }
       if (this.current) for (const p of this.current.points) { p.x *= sx; p.y *= sy; }
+      for (const s of this.strokes) if (s.prints) for (const pr of s.prints) for (const p of pr) { p.x *= sx; p.y *= sy; }
+      if (this.currentHand) for (const pr of this.currentHand.prints) for (const p of pr) { p.x *= sx; p.y *= sy; }
     }
     this.rebuild();
   }
@@ -539,6 +541,7 @@ class WipeMask {
     const g = this.ctx;
     g.clearRect(0, 0, this.canvas.width, this.canvas.height);
     for (const s of this.strokes) {
+      if (s.isHand) { for (const pr of s.prints) this.paintHandprint(g, pr); continue; }
       if (s.isDot || s.points.length === 1) {
         const p = s.points[0];
         this.paintSegment(g, p.x, p.y, p.x, p.y, this.strokeWidth() * 0.5);
@@ -547,11 +550,70 @@ class WipeMask {
       }
     }
   }
+  // open palm pressed against the glass: clears a hand-shaped print
+  // (palm + five fingers) out of the mist, like a real hand on a fogged
+  // mirror. Moving the open hand smears it, wiping a wider area.
+  paintHandprint(ctx, lm) {
+    const d = (a, b) => Math.hypot(lm[a].x - lm[b].x, lm[a].y - lm[b].y);
+    const fw = Math.max(d(5, 9), d(9, 13), d(13, 17)) * 0.95; // finger width
+    const draw = (alpha, scale, blur) => {
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#fff';
+      ctx.strokeStyle = '#fff';
+      ctx.shadowColor = 'rgba(255,255,255,0.9)';
+      ctx.shadowBlur = blur;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      // palm
+      ctx.lineWidth = fw * scale;
+      ctx.beginPath();
+      for (const [i, k] of [0, 1, 2, 5, 9, 13, 17].entries()) {
+        if (i === 0) ctx.moveTo(lm[k].x, lm[k].y); else ctx.lineTo(lm[k].x, lm[k].y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      // fingers
+      for (const f of [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16], [17, 18, 19, 20]]) {
+        ctx.lineWidth = fw * scale * (f[0] === 17 ? 0.85 : 1);
+        ctx.beginPath();
+        ctx.moveTo(lm[f[0]].x, lm[f[0]].y);
+        for (let i = 1; i < f.length; i++) ctx.lineTo(lm[f[i]].x, lm[f[i]].y);
+        ctx.stroke();
+      }
+    };
+    draw(0.5, 1.25, fw * 0.5); // soft damp rim
+    draw(1, 0.95, 0);          // clear core
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+  beginHand(lm, t) {
+    const c = lm[9];
+    this.currentHand = { isHand: true, prints: [lm], points: [{ x: c.x, y: c.y, t }] };
+    this.paintHandprint(this.ctx, lm);
+  }
+  extendHand(lm, t) {
+    if (!this.currentHand) return this.beginHand(lm, t);
+    const h = this.currentHand;
+    const last = h.prints[h.prints.length - 1];
+    if (Math.hypot(lm[9].x - last[9].x, lm[9].y - last[9].y) < 4) return;
+    h.prints.push(lm);
+    h.points.push({ x: lm[9].x, y: lm[9].y, t });
+    this.paintHandprint(this.ctx, lm);
+  }
+  endHand() {
+    if (!this.currentHand) return;
+    const done = this.currentHand;
+    this.currentHand = null;
+    this.strokes.push(done);
+    onStrokeCompleted(done);
+  }
   undo() {
     this.strokes.pop();
     this.rebuild();
   }
   clear() {
+    this.currentHand = null;
     this.strokes = [];
     this.current = null;
     this.rebuild();
@@ -609,14 +671,14 @@ function renderFrame(now) {
     if (offFog.width !== W || offFog.height !== H) { offFog.width = W; offFog.height = H; }
     offFogCtx.save();
     offFogCtx.setTransform(1, 0, 0, 1, 0, 0);
-    offFogCtx.filter = `blur(${quality.blur + 6}px) saturate(0.4) brightness(1.4) contrast(0.6)`;
+    offFogCtx.filter = `blur(${quality.blur + 10}px) saturate(0.3) brightness(1.5) contrast(0.5)`;
     offFogCtx.translate(W, 0);
     offFogCtx.scale(-1, 1);
     offFogCtx.drawImage(video, cover.sx, cover.sy, cover.sw, cover.sh, 0, 0, W, H);
     offFogCtx.restore();
     offFogCtx.filter = 'none';
     // milky veil
-    offFogCtx.fillStyle = 'rgba(255,255,255,0.55)';
+    offFogCtx.fillStyle = 'rgba(255,255,255,0.7)';
     offFogCtx.fillRect(0, 0, W, H);
 
     // 3. shape it by the mist density field
@@ -676,14 +738,14 @@ function setInstruction(text) {
 
 function onFogSettled() {
   appState.phase = 'fogged';
-  setInstruction('Pinch your fingers. Draw in the mist.');
+  setInstruction('Pinch to draw, or press your open hand on the glass.');
   tapToMistBtn.classList.add('hidden');
   controls.classList.remove('hidden');
   updateControlAvailability();
 }
 
 function onDrawingReset() {
-  setInstruction('Pinch your fingers. Draw in the mist.');
+  setInstruction('Pinch to draw, or press your open hand on the glass.');
   replayPanel.classList.add('hidden');
   updateControlAvailability();
 }
@@ -714,7 +776,6 @@ function fullReset() {
   appState.phase = 'clear';
   controls.classList.add('hidden');
   replayPanel.classList.add('hidden');
-  tapToMistBtn.classList.remove('hidden');
   setInstruction('Breathe a little magic.');
   updateControlAvailability();
 }
@@ -732,7 +793,7 @@ btnReplayMist.addEventListener('click', () => {
 });
 btnReplayKeep.addEventListener('click', () => {
   replayPanel.classList.add('hidden');
-  setInstruction('Pinch your fingers. Draw in the mist.');
+  setInstruction('Pinch to draw, or press your open hand on the glass.');
 });
 btnPlay.addEventListener('click', () => playback.play());
 btnReplayPlay.addEventListener('click', () => playback.play());
@@ -814,7 +875,7 @@ const handTrack = {
           delegate: 'GPU'
         },
         runningMode: 'VIDEO',
-        numHands: 1
+        numHands: 2
       });
       this.ready = true;
     } catch (err) {
@@ -835,6 +896,10 @@ const handTrack = {
       return;
     }
     this.lastSeen = now;
+
+    // open palm (all 5 fingers extended) → handprint wipe, takes priority
+    if (!this.pinchActive && this.detectPalm(result.landmarks, now)) return;
+
     const thumb = lm[4], index = lm[8], wrist = lm[0], midMcp = lm[9];
     // 3D distance (x,y,z) instead of flat 2D — a purely 2D ratio spikes
     // falsely whenever the hand rotates while moving to draw (perspective
@@ -894,7 +959,43 @@ const handTrack = {
     }
   },
 
+  palmFrames: 0,
+  palmActive: false,
+  isOpenPalm(lm) {
+    const w = lm[0];
+    const dist = (a) => Math.hypot(a.x - w.x, a.y - w.y, (a.z || 0) - (w.z || 0));
+    // each finger tip must be clearly further from the wrist than its middle joint
+    for (const [tip, pip] of [[8, 6], [12, 10], [16, 14], [20, 18]]) {
+      if (dist(lm[tip]) < dist(lm[pip]) * 1.12) return false;
+    }
+    // thumb spread away from the index knuckle
+    const t = Math.hypot(lm[4].x - lm[5].x, lm[4].y - lm[5].y);
+    const ref = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y) || 1;
+    return t / ref > 0.45;
+  },
+  detectPalm(hands, now) {
+    const open = hands.filter((h) => this.isOpenPalm(h));
+    if (open.length) this.palmFrames++; else this.palmFrames = 0;
+    if (this.palmFrames >= 3 && appState.phase === 'fogged') {
+      const lm = open[0].map((p) => videoNormToCanvas(p.x, p.y));
+      this.palmActive = true;
+      wipe.extendHand(lm, now);
+      for (let i = 1; i < open.length; i++) {
+        wipe.paintHandprint(wipe.ctx, open[i].map((p) => videoNormToCanvas(p.x, p.y)));
+      }
+      cursorFx.visible = false;
+      return true;
+    }
+    if (!open.length && this.palmActive) {
+      this.palmActive = false;
+      wipe.endHand();
+    }
+    return open.length > 0;
+  },
+
   handleLost() {
+    this.palmFrames = 0;
+    if (this.palmActive) { this.palmActive = false; wipe.endHand(); }
     if (this.pinchActive) {
       this.pinchActive = false;
       this.belowCount = 0;
@@ -1152,7 +1253,7 @@ const playback = {
 /* ----------------------------------------------------------------------
    Start flow — request the camera only after a deliberate action
 ------------------------------------------------------------------------*/
-btnStart.addEventListener('click', async () => {
+async function startMirror() {
   btnStart.disabled = true;
   startStatus.textContent = 'Waking the glass…';
   let stream = null;
@@ -1161,6 +1262,7 @@ btnStart.addEventListener('click', async () => {
       video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
     });
   } catch (err) {
+    startScreen.classList.remove('hidden');
     startStatus.textContent = 'Camera access is needed for the mirror to work. Please allow it and try again.';
     btnStart.disabled = false;
     return;
@@ -1175,11 +1277,13 @@ btnStart.addEventListener('click', async () => {
 
   resize();
   startScreen.classList.add('hidden');
-  tapToMistBtn.classList.remove('hidden');
 
   handTrack.init().then(() => { if (handTrack.ready) handLoop(); });
   faceTrack.init(); // fire-and-forget; breathLoop checks faceTrack.ready itself
   requestAnimationFrame(breathLoop);
-});
+}
+// start straight away; the button only shows if the camera was refused
+btnStart.addEventListener('click', startMirror);
+startMirror();
 
 resize();
