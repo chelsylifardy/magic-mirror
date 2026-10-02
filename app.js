@@ -212,7 +212,7 @@ class MistField {
       x = Math.min(Math.max(x, 0), W);
       y = Math.min(Math.max(y, 0), H);
       const r = minDim * (0.18 + Math.min(spread, 1) * 0.12);
-      const a = Math.min((intensity * dt * 70) / stampCount, 0.7);
+      const a = Math.min((intensity * dt * 55) / stampCount, 0.5);
       if (a <= 0) continue;
       const grad = g.createRadialGradient(x, y, 0, x, y, r);
       grad.addColorStop(0, `rgba(255,255,255,${a})`);
@@ -240,7 +240,7 @@ class MistField {
     if (this.totalBreath - this.lastGrainAt > 0.3) {
       this.lastGrainAt = this.totalBreath;
       g.globalCompositeOperation = 'source-atop';
-      g.globalAlpha = 0.05;
+      g.globalAlpha = 0.1;
       g.fillStyle = this.pattern || '#fff';
       g.fillRect(0, 0, W, H);
       g.globalAlpha = 1;
@@ -294,7 +294,7 @@ class MistField {
       blobs.push({
         x: cx, y: cy,
         r: minDim * (0.14 + Math.random() * 0.2),
-        alpha: 0.85 + Math.random() * 0.15,
+        alpha: 0.7 + Math.random() * 0.2,
         delay: radial * 0.7 + Math.random() * 0.15,
         dur: 0.5 + Math.random() * 0.5
       });
@@ -336,7 +336,7 @@ class MistField {
     }
     // fine moisture texture, confined to the fog shape already painted
     g.globalCompositeOperation = 'source-atop';
-    g.globalAlpha = 0.16;
+    g.globalAlpha = 0.28;
     g.fillStyle = this.pattern || '#fff';
     g.fillRect(0, 0, W, H);
     g.globalAlpha = 1;
@@ -647,6 +647,7 @@ const wipe = new WipeMask();
 ------------------------------------------------------------------------*/
 const offFog = document.createElement('canvas');
 const offFogCtx = offFog.getContext('2d');
+let frostPattern = null;
 
 let lastFrameT = performance.now();
 function renderFrame(now) {
@@ -671,15 +672,21 @@ function renderFrame(now) {
     if (offFog.width !== W || offFog.height !== H) { offFog.width = W; offFog.height = H; }
     offFogCtx.save();
     offFogCtx.setTransform(1, 0, 0, 1, 0, 0);
-    offFogCtx.filter = `blur(${quality.blur + 10}px) saturate(0.3) brightness(1.5) contrast(0.5)`;
+    offFogCtx.filter = `blur(${quality.blur + 9}px) saturate(0.55) brightness(1.18) contrast(0.82)`;
     offFogCtx.translate(W, 0);
     offFogCtx.scale(-1, 1);
     offFogCtx.drawImage(video, cover.sx, cover.sy, cover.sw, cover.sh, 0, 0, W, H);
     offFogCtx.restore();
     offFogCtx.filter = 'none';
     // milky veil
-    offFogCtx.fillStyle = 'rgba(255,255,255,0.7)';
+    offFogCtx.fillStyle = 'rgba(255,255,255,0.3)';
     offFogCtx.fillRect(0, 0, W, H);
+    // frosty micro-texture so it reads as condensation, not a white sheet
+    if (!frostPattern) frostPattern = offFogCtx.createPattern(grainTile, 'repeat');
+    offFogCtx.globalAlpha = 0.35;
+    offFogCtx.fillStyle = frostPattern;
+    offFogCtx.fillRect(0, 0, W, H);
+    offFogCtx.globalAlpha = 1;
 
     // 3. shape it by the mist density field
     offFogCtx.globalCompositeOperation = 'destination-in';
