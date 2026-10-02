@@ -882,7 +882,10 @@ const handTrack = {
           delegate: 'GPU'
         },
         runningMode: 'VIDEO',
-        numHands: 2
+        numHands: 2,
+        minHandDetectionConfidence: 0.35,
+        minHandPresenceConfidence: 0.35,
+        minTrackingConfidence: 0.35
       });
       this.ready = true;
     } catch (err) {
@@ -972,18 +975,27 @@ const handTrack = {
     const w = lm[0];
     const dist = (a) => Math.hypot(a.x - w.x, a.y - w.y, (a.z || 0) - (w.z || 0));
     // each finger tip must be clearly further from the wrist than its middle joint
+    // lenient: at least 3 of the 4 fingers extended (ring/pinky often
+    // read as slightly bent when the hand is tilted toward the camera)
+    let extended = 0;
     for (const [tip, pip] of [[8, 6], [12, 10], [16, 14], [20, 18]]) {
-      if (dist(lm[tip]) < dist(lm[pip]) * 1.12) return false;
+      if (dist(lm[tip]) > dist(lm[pip]) * 1.02) extended++;
     }
+    if (extended < 3) return false;
     // thumb spread away from the index knuckle
     const t = Math.hypot(lm[4].x - lm[5].x, lm[4].y - lm[5].y);
     const ref = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y) || 1;
-    return t / ref > 0.45;
+    return t / ref > 0.28;
   },
   detectPalm(hands, now) {
     const open = hands.filter((h) => this.isOpenPalm(h));
-    if (open.length) this.palmFrames++; else this.palmFrames = 0;
-    if (this.palmFrames >= 3 && appState.phase === 'fogged') {
+    // hysteresis: confirm after 2 open frames, keep wiping through brief
+    // misreads (up to ~6 frames) instead of dropping out mid-wipe
+    if (open.length) { this.palmFrames = Math.min(this.palmFrames + 1, 8); this.palmMiss = 0; }
+    else this.palmMiss = (this.palmMiss || 0) + 1;
+    if (this.palmActive && !open.length && this.palmMiss <= 6) return true;
+    if (!open.length && !this.palmActive) this.palmFrames = 0;
+    if (open.length && this.palmFrames >= 2 && appState.phase === 'fogged') {
       const lm = open[0].map((p) => videoNormToCanvas(p.x, p.y));
       this.palmActive = true;
       wipe.extendHand(lm, now);
@@ -995,6 +1007,7 @@ const handTrack = {
     }
     if (!open.length && this.palmActive) {
       this.palmActive = false;
+      this.palmFrames = 0;
       wipe.endHand();
     }
     return open.length > 0;
